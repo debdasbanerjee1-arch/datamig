@@ -1,367 +1,263 @@
-# datamap — Agentic Source-to-Target Data Mapping
+# datamap — agentic source-to-target data mapping
 
-An agentic pipeline that turns an opaque legacy extract (a life & pensions policy
-master) into a validated, audited target mapping — with a real-time demo UI.
+Turns an opaque legacy extract — a life & pensions policy master — into a
+**certified mapping**, an **executable ETL**, and the **evidence** a migration
+assurance reviewer needs, across four workspaces.
 
-## The honesty contract (hostile-code behaviour)
+Everything runs **offline and deterministically**. The LLM is an escalation tier
+for cases deterministic logic cannot reach; with no API key configured the whole
+pipeline, including all three script generators, works unchanged.
 
-The demo COBOL contains NO narrative comments — every extracted business rule
-is discovered from code structure alone (dataflow slicing, 88-level condition
-names, screen labels, copybook alignment). `data/hostile/NBCOMM74.cbl` is a
-deliberately realistic-ugly fixture (SECTIONs, GO TO flow, PERFORM ... THRU,
-period-terminated IFs, multi-record REDEFINES, OCCURS/SEARCH, EXEC SQL/CICS,
-STRING/INSPECT, COPY REPLACING). The tested contract on such code: never
-crash, never be confidently wrong — the slice is still found, parse coverage
-drops (~60% on the fixture), confidence is capped, and the rule ships flagged
-for LLM assist + SME review instead of shipping a guess.
+---
 
-To see it in the UI: on tab 1 remove the demo source/code chips (× on each),
-add `data/hostile/NBEXTRACT.csv` + `data/hostile/NBCOMM74.cbl`, and run
-Flow A — a new knowledge version appears whose rule card reads "parse 62%"
-with confidence capped at 0.6. Both estates coexist as separate versions in
-the store (Reset wipes the store; the chip × buttons do not).
+## The four workspaces
 
-## Two-flow architecture
+    1 · Mapping         source data + dictionaries  ->  certified mapping spec
+    2 · Transformation  certified spec              ->  ETL script + target data
+    3 · Validation      target data                 ->  is it right?
+    4 · Reconciliation  target data vs source       ->  do the totals agree?
 
-The pipeline is split around a PERSISTED, versioned knowledge graph
-(`data/knowledge.duckdb` — the certified asset; the staging warehouse is just
-a cache):
+Each has the same shape: **an inputs panel** naming what feeds it, **an agent
+rail** showing the steps, **a generated script**, and **results with evidence**.
 
-**Flow A — source understanding (one-off, re-run on change only)**
+### 1 · Mapping workspace
 
-    stage -> analyst -> legacy expert -> persist knowledge
+Three input buckets, each accepting several files:
 
-    python -m cli.run_flow_a --source data/EFAS0042.csv --code data/legacy
+| | | |
+|---|---|---|
+| **A** | Source dictionaries | one JSON per source file |
+| **B** | Target dictionary | the target definition |
+| **C** | Source data | one or more CSVs — joins are discovered |
 
-Inputs are fingerprinted (SHA-256 per file); unchanged inputs reuse the
-existing version and skip the agents. Output: knowledge vN (status `draft`)
-holding the graph (nodes/edges with provenance), REIFIED business rules
-(resolved text + COBOL evidence + structured decision tables + input roles),
-and the serialized insight/dictionary artifacts.
+    manual_inputs -> mapping -> validation -> review [-> apply_decisions]
 
-**Certification gate (human)**
+The mapping agent scores candidates deterministically, **earns** confidence by
+executing each proposed transform against staged data, and routes every mapping
+to one of three gates: `auto_accept`, `review`, `reject`. The reviewer resolves
+only the exceptions, then certifies. Certification applies decisions to *the spec
+that was reviewed* — it never re-runs the mapping agent, so a decision cannot be
+applied to a spec the reviewer never saw.
 
-    python -m cli.kg certify 1 --by "Name" --notes "sign-off"
-    python -m cli.kg list | show | export | lineage
+### 2 · Transformation workspace
 
-Certifying a version supersedes the previously certified one. Export writes a
-committable JSON of the whole graph.
+Compiles the certified spec into a standalone Python (pandas + DuckDB) script and
+executes it, rebuilding the joined workset from the spec's `join_plan`.
 
-**Demo UI** — the dashboard (`uvicorn api.server:app`) now mirrors the split:
-tab 1 runs Flow A and shows the knowledge banner (version, fingerprint,
-certify); tab 2 is the knowledge explorer (rules with COBOL evidence,
-provenance, lineage queries); tab 3 runs Flow B against the chosen version.
-Re-running Flow A with unchanged inputs replays instantly from the store.
+### 3 · Validation workspace
 
-**Tab 4 — transformation workspace (Flow C)** turns the mapping certified on
-tab 3 into an executable ETL and runs it end to end. It shows the input feed
-(source file(s), target dictionary, mapping spec), generates a Python
-(pandas + DuckDB) script from the certified spec, executes it against the loaded
-source file(s) — rebuilding the joined workset per the spec's `join_plan` and
-keeping the primary file's row grain — then renders the materialised target
-dataset in a grid with a CSV export. The transform runs the spec's own DuckDB
-SQL (`strptime` / `TRY_CAST` / `CASE` / `NULLIF`) verbatim, so tab 4's output is
-consistent with what tab 3 certified. Endpoints: `POST /api/transform/codegen`
-and `POST /api/transform/run` (both stateless — they consume the spec the client
-already holds and read the current input files only).
+Asks whether the delivered data is **right**. Eight check families, and the
+headline is not how much work was done but what it found:
 
-**Certifying decisions (Flow B) — apply, don't re-map.** When a reviewer resolves
-the queue and certifies, the client posts the exact spec it reviewed plus the
-decisions to `POST /api/flow_b/certify`. That path runs
-`load_kg → load_target → seed_spec → apply_decisions → validation → review`: it
-adopts the reviewed spec verbatim and applies the human choices on top, then
-re-validates — it does **not** re-run the mapping agent. This keeps decisions
-honest (they apply to what was on screen) and avoids regenerating a mapping the
-human already signed off. Unmapped targets can be resolved with a load-time
-default (a type-appropriate value is suggested; the reviewer accepts or edits it),
-which is promoted into a concrete mapping by `apply_decisions`.
+> **CERTIFIED** — Nothing failed. 1,150 values re-derived from source and
+> compared, plus 41 rule checks across data type, completeness, domain, key,
+> duplicates, grain, wellformed.
 
-**Flow B — per-target mapping (repeatable)**
+### 4 · Reconciliation workspace
 
-    load knowledge -> mapping -> validation -> review
+Asks whether the delivered data **agrees with the source**. Four steps:
 
-    python -m cli.run_flow_b --target-dict data/target_dict/<your-file>.json
+    1. Rule Generation    controls derived from the spec, dictionary and insight
+    2. Human Review       a reviewer deselects what doesn't apply, adds their own
+    3. Script Generation  the standalone script, built from the CERTIFIED set
+    4. Reconciliation     executed, from that same set
 
-Consumes the latest certified version by default (draft with a warning
-otherwise) and stamps `kg_version` / `kg_fingerprint` / `kg_status` on the
-mapping spec, so every mapping is traceable to the exact knowledge it came
-from. The combined single-run pipeline (`python -m cli.run`) still works.
+---
 
-Five agents run as a LangGraph pipeline:
+## Design principles
 
-1. **Data Analyst** — profiles the data, scans PII, and runs an EXECUTABLE
-   data-quality rule library (UK NI number format, UK postcode grammar,
-   calendar-valid dates, discovered cross-date invariants, conditional
-   completeness from mined dependencies, key uniqueness). Every rule carries
-   its violation-count SQL; `python -m cli.run_analyst` writes the whole
-   library as `<table>_dq_rules.sql` for full-volume reruns during cleansing.
-2. **Legacy Expert** — decodes business meaning from COBOL + screen, and *extracts
-   calculation logic* for batch-derived fields (e.g. loyalty bonus, early-exit
-   penalty computed by `BONCALC.cbl`) that appear on no screen — the COBOL
-   procedure code is the only documentation. Deterministic extraction finds the
-   `COMPUTE`/assignment paragraphs via BACKWARD SLICING (fixed point over the
-   working-storage chain, any depth), reads 88-level condition names as free
-   business vocabulary and value decodes, handles GIVING arithmetic and
-   reference modification, and reports a statement-coverage metric per rule —
-   when the parser understood under 80% of a slice, confidence drops and the
-   rule is flagged for LLM assist + SME review. The LLM translates the sliced
-   logic into plain-English business rules.
-3. **Mapping** — aligns source to target, builds transforms, gates by confidence.
-   Mappings whose source is itself a calculated field are always held at
-   *review* — the pass-through validates, but a human must confirm the extracted
-   calculation matches the target attribute's definition.
-4. **Validation** — materialises the target and checks the whole spec.
-5. **Review** — surfaces only what needs a human, with full lineage.
+These are the rules the code actually follows. Each was learned from a defect.
 
-**Derived source insight (mapping workspace).** The manual Mapping Workspace
-needs a `TableInsight` for validation's key-integrity and crossfield checks, but
-does not require the user to supply one. `engine/agents/analyst.py:analyze_light`
-derives exactly the fields those checks consume — `candidate_keys` and
-`dependencies` — reusing the same `_profile` / `_dependencies` helpers the full
-analyst uses, so there is one definition of "candidate key" and one of
-"populated", never two that can drift. It deliberately skips the DQ rule
-library, the PII scan and both LLM calls, which is where `analyze()`'s cost
-lives. The result is cached in the STAGING warehouse (`derived_insight`, keyed
-by table + SHA-256 of the source file) so the mapping run, the certify pass and
-the tab 3 / tab 4 output checks all read the same document; `engine/insight_cache.py`
-is the single entry point. A user-uploaded insight always wins — bucket D on
-tab 1 is an override, not a required input. Cache invalidation is by file
-content, and `/api/inputs/reset` deletes the warehouse, so a stale insight can
-never be served. Note this path is still O(rows) in Python (`fetch_dicts`);
-scaling it means reimplementing profiling as DuckDB aggregate SQL.
+### Deterministic first, LLM as escalation
 
-**Multi-source relationship discovery.** When more than one source file is
-loaded, a relationship-discovery step (`engine/agents/relationship.py`) finds
-how the staged tables relate purely from the data in DuckDB — which columns
-share values, which of those are join keys (one side unique), which are
-merely a shared code vocabulary — never from name matching alone (a name
-match only nominates a pair for value testing). `engine/composite.py` then
-picks a primary (driving) table and LEFT JOINs every other file that has a
-safe N:1/1:1 path to it, so the primary's row grain never fans out; files
-without a safe path are excluded and reported, not silently joined. The
-result is one combined workset (a DuckDB view + merged dictionary) that the
-mapping, validation and review agents consume unchanged. The discovered
-relationships are persisted per input fingerprint and served at
-`GET /api/relationships` for the UI's relationship view.
+The deterministic tier does the work: DuckDB scoring, value-decode matching, join
+discovery by value containment. The LLM escalates only where deterministic logic
+cannot reach — cross-vocabulary matches, and composite transforms the synthesiser
+cannot express. It is never trusted, only **tested**: a proposal must reference
+real columns, be an expression rather than a statement, execute against staged
+data, and not lose rows. It is capped at `review` and never auto-accepts. A
+failing proposal is discarded and the deterministic mapping stands, so the tier
+can only improve on what was there.
+
+### Never confidently wrong
+
+Type compatibility cannot carry a mapping on its own. Two string columns are
+type-compatible with every string target, so without a floor ~20 candidates tied
+at exactly 0.4 and the winner was decided by **column order** — which is how
+`POLNO` came to feed both `tax_file_number` and `investor_id` while `NINO` and
+`CUSTID` were reported as "no target attribute". Matches that are not lexical at
+all are recovered through authored `aliases` in the dictionary, not a synonym
+table buried in the matcher.
+
+### Derivation gaps — the transform, not the match
+
+The synthesiser has a fixed **single-column** repertoire: enum decode, date
+parse, numeric cast, trim, copy. It cannot compose. So a target needing
+concatenation, unit conversion or date arithmetic silently received a copy of one
+column — and certified clean, because every downstream check can confirm a value
+is well-formed but not that it is the value the target asked for. Observed:
+`full_name` ← SURNAME (forename dropped), `annual_premium_gbp` ← PREM_PENCE (out
+by 100×–1200×), `age_at_commencement` ← COMMDT — all three certified, the age
+even passing the data-type check because `20190220` parses as an integer.
+
+`_derivation_gap` detects this by comparing what the **target says it needs**
+against what the **SQL actually references**: (a) the description names another
+column's business vocabulary, (b) target and source carry conflicting members of
+a unit family (pence vs gbp, monthly vs annual), (c) the description contains an
+explicit format instruction. Evidence must be **distinctive** — a token shared
+across the dictionary ("scheme", "policy") proves nothing, and matching on shared
+vocabulary falsely flagged six correct mappings before that constraint existed.
+
+### No silent skips
+
+Every attribute the target dictionary declares produces a row in the validation
+report — an executed assertion, or an explicit `skipped` row stating why none
+applies. Previously a nullable non-enum attribute produced no rows at all, so
+"not examined" and "examined and clean" were indistinguishable. `skipped` never
+affects the verdict and is never counted as a pass.
+
+### Evidence, not assertion
+
+Every executed check records **the SQL it ran** and the population it scanned. A
+green tick is a claim; a green tick with its SQL and row count is evidence. Every
+failing check names the offending records — for a transform failure that is
+`policy_reference | expected | delivered`, a genuine row-level diff. Row numbers
+are file positions, not positions within the filtered set (`row_number() OVER ()`
+applied after a `WHERE` numbers the survivors, so the first offender always read
+"row 1").
+
+Because rows are aligned by ordinal position, a row-count mismatch **suspends**
+the transform comparison rather than cascading one extra row into a dozen
+spurious column failures that bury the real defect.
+
+### One derivation, one artefact
+
+Reconciliation rules were once derived in **four** places — the runner, the
+preview, the script generator, and again inside the generator for categorical
+attributes. Four implementations of one rule is why a single defect (driver codes
+compared in *source* terms against *delivered* values, so `policy_status NOT IN
+('CL')` was true for every row) needed four separate fixes.
+
+Rules are now an artefact, derived once in `api/recon_rules.py`:
+
+    derive_candidates() -> human certifies / adds -> certified set
+                                                       |          |
+                                              script generation   execution
+
+Both consumers read the same set, so a script and the results it is meant to
+reproduce cannot diverge. A test asserts the app and the standalone script run
+**identical check names**. Every rule carries its origin (`mined` /
+`llm_proposed` / `user_added`) and who certified it — reconciliation previously
+had no certification gate at all, leaving no answer to "which controls did we
+sign off, and who signed them?".
+
+### Structured rules, never prose
+
+A business-authored control is the same object as a mined one, arriving with
+`origin: "user_added"`. It is an **aggregate** — sum / average / min / max /
+count / distinct count of a column, optionally broken down by categorical columns
+("total sum assured for each product reconciles") — chosen entirely from the
+target dictionary. An invalid control **cannot be expressed**, there is no
+natural-language step, and therefore nothing to mistranslate into SQL. Invalid
+requests are rejected with a reason and displayed, never silently dropped.
+
+### Scripts are reproducible by construction
+
+No LLM touches script generation. The generated script is the audit artefact:
+"run this yourself and you get what we got" only holds if it is a deterministic
+function of the certified spec. Generating the same scripts five times produces
+byte-identical output.
+
+The SQL is emitted as a **raw** literal — embedding it in a normal Python string
+meant a certified `'\t'` reached DuckDB as a literal tab, so the handed-over
+script silently executed different SQL from the one the workspace validated.
+
+The generators embed the certified expression and never parse it, so they are
+agnostic to the transformation *pattern*: window functions, regex, nested CASE
+and date arithmetic all generate and run correctly. Unfamiliar patterns fail at
+**synthesis**, not generation — which is why the escalation tier belongs there.
+
+---
 
 ## Architecture
 
-The project is layered so the brains are independent of how they're delivered.
+    engine/                 the domain core — depends on nothing else
+      agents/               plain functions, graph-agnostic
+        analyst.py          profiling, candidate keys, conditional dependencies
+        mapping_agent.py    scoring, SQL synthesis, gates, LLM escalation
+        validator.py        in-pipeline validation of a proposed spec
+        reviewer.py         exception queue, apply_decisions
+        relationship.py     join discovery by value containment
+        legacy_expert.py    COBOL comprehension (see below)
+        contracts.py        shared shapes — no agent imports another agent
+      orchestration/        LangGraph nodes + graphs (thin adapters)
+      composite.py          N sources + N dictionaries -> one workset
+      insight_cache.py      derived source insight, cached by file content hash
+      staging.py            DuckDB warehouse
 
+    api/                    HTTP surface
+      server.py             endpoints + SSE streaming
+      transform.py          ETL generation + execution
+      validate.py           output validation
+      recon_rules.py        reconciliation rules as a certified artefact
+      reconcile.py          reconciliation execution + script generation
+
+    web/static/             single-page UI (vanilla JS, no build step)
+    cli/                    a second front door onto the same engine
+    tests/                  98 tests (4 skipped — need live LLM)
+
+**Dependency rule:** `api/`, `web/` and `cli/` depend on `engine/`; `engine/`
+depends on none of them.
+
+Two guards exist because their failure modes are invisible. `tests/test_frontend_scope.py`
+walks every top-level IIFE in `app.js` and fails if a helper is used outside the
+scope that defines it — a cross-scope reference only surfaces when a user reaches
+that tab and clicks. And asset URLs are stamped with a **content hash** at serve
+time: hand-maintained `?v=` strings meant an edited `app.js` shipped with a stale
+version and every returning browser kept running the cached previous build,
+indistinguishable from the fix not working.
+
+### The source dictionary
+
+Four fields per column, plus three optional:
+
+```json
+{
+  "name": "NINO",
+  "business_name": "NI Number",
+  "description": "The National Insurance number.",
+  "inferred_type": "FREE_TEXT",
+  "aliases": ["National Insurance number", "tax identifier"],
+  "value_decode": { "CL": "Claimed" },
+  "join_key": true
+}
 ```
-datamap/
-  engine/                # the domain core — no HTTP / UI knowledge
-    agents/              #   the five agents + relationship discovery + shared contracts
-    orchestration/       #   LangGraph: graph.py, nodes.py, state.py
-    staging.py           #   DuckDB staging layer (Warehouse)
-    composite.py         #   multi-source join planning -> one workset
-    kgraph.py            #   in-memory knowledge graph + resolver (used by legacy expert)
-    kgstore.py           #   PERSISTED, versioned knowledge graph (data/knowledge.duckdb)
-    models.py            #   gating model (Gate, decide_gate)
-    config.py            #   env / LLM client (.env loader)
-  api/                   # delivery: FastAPI HTTP surface (JSON + SSE)
-    server.py
-    transform.py         #   Flow C: spec -> Python (pandas/DuckDB) codegen + run
-  web/                   # delivery: the frontend client (static SPA)
-    static/              #   index.html, styles.css, app.js
-  cli/                   # delivery: command-line entrypoints
-    run.py, run_*.py
-  data/                  # synthetic source, legacy code, target dictionary
-  tests/                 # pytest suite
-```
 
-**Dependency rule:** `api/`, `web/`, and `cli/` depend on `engine/`; `engine/`
-depends on none of them. The engine is independently testable and reusable; any
-number of front doors (the API, the CLI, a future React frontend) sit on top.
+The COBOL/screen provenance fields and the seven `derivation_*` fields were
+removed when the comprehension pipeline stopped running — asking a human to
+author them produced noise. `value_decode` **stays**, and is the field people
+mistake for legacy metadata: enum targets may only match on coded evidence, the
+auto-accept gate depends on every code having a target equivalent, and the decode
+SQL is generated from it. It is business knowledge — an analyst knows `CL` means
+Claimed. `aliases` is where domain knowledge lives that no similarity metric
+recovers: `NINO` wins `tax_file_number` only because of them.
 
-**Simplified per-file dictionaries + multi-source mapping (v9).** Bucket A and
-bucket C both take several files; each dictionary names its file in `table`, so
-upload order is irrelevant. The dictionary is four fields per column
-(`name`, `business_name`, `description`, `inferred_type`) plus optional
-`value_decode`, `aliases` and `join_key`. The COBOL/screen provenance fields and
-the seven `derivation_*` fields are gone from the declared schema
-(`extra='allow'` keeps legacy-expert output round-tripping). `value_decode`
-stays deliberately: it is business knowledge, not legacy metadata, and enum
-matching, the auto-accept gate and the decode SQL all depend on it.
+### What the UI exposes vs. what the engine holds
 
-Relationships between files are discovered from the DATA
-(`agents/relationship.py` — a name match only nominates a column pair for a
-value-containment test), the finest-grain file becomes the primary, and safe
-grain-preserving edges are LEFT JOINed into one workset
-(`composite.build_workset`). The mapping agent therefore needs no multi-file
-logic: it sees one wide table, and `origin_table` on every combined column is
-what lets each mapping report the file it came from. Every mapping element
-carries `source_files`, which survives certification and is shown in the UI.
+The UI drives `flow_mapping_manual`. The earlier source-understanding and
+knowledge-explorer tabs were retired and their delivery-layer code **deleted**
+rather than left unreachable — 15 endpoints, their SSE generators, and the
+frontend cards.
 
-**Script fidelity.** The generated scripts are the reproducibility claim — "run
-this and you get what we got" — which only holds if the SQL in the script is a
-byte-faithful copy of the certified spec. It was not: the transform generator
-embedded the expression in a normal Python string literal, so any backslash
-escape Python recognised was reinterpreted. A certified `'\t'` reached DuckDB as
-a literal tab, and the handed-over script silently executed different SQL from
-the one the workspace validated. Now emitted as a raw literal, with a test
-asserting every certified expression appears verbatim in the script.
-
-The generators embed the certified expression and never parse it, so they are
-agnostic to the transformation PATTERN: window functions, regex, nested CASE and
-date arithmetic — none of which the deterministic synthesiser can produce —
-generate and run correctly. Unfamiliar patterns fail at SYNTHESIS, not at
-generation, which is why the escalation tier belongs at `_synth`.
-
-**Derivation gaps — the transform, not the match.** The deterministic
-synthesiser has a fixed SINGLE-COLUMN repertoire: enum decode, date parse,
-numeric cast, trim, copy. It cannot compose. So a target needing concatenation,
-unit conversion, arithmetic across columns or reformatting silently received a
-copy of the best-matching single column — and certified clean, because every
-downstream check can confirm a value is well-formed but not that it is the value
-the target asked for. Observed on a composite fixture: `full_name` <- SURNAME
-(forename dropped), `annual_premium_gbp` <- PREM_PENCE (out by 100x-1200x),
-`age_at_commencement` <- COMMDT (a date where a count of years belongs) — all
-three certified, and the age even passed the data-type check because 20190220
-parses as an integer.
-
-`_derivation_gap` detects this from the artefacts rather than a rule list, by
-comparing what the TARGET says it needs against what the SQL actually
-references: (a) the target description names another source column's business
-vocabulary, (b) target and source carry conflicting members of a unit/scale
-family (pence vs gbp, monthly vs annual), (c) the description contains an
-explicit format instruction. Evidence must be DISTINCTIVE — a token shared
-across the dictionary ('scheme', 'policy') proves nothing and falsely flagged
-six correct mappings before that constraint was added. A gap caps the gate at
-REVIEW and the confidence at 0.60, outranking every other cap.
-
-`_llm_synthesise` is the escalation tier for gapped mappings: given the target
-type, description, source samples and the stated gap, the LLM proposes composite
-SQL. It is not trusted, it is TESTED — the proposal must reference only real
-columns, must not be a statement, must EXECUTE against staged data, and must not
-lose rows against what it replaces. It is capped at REVIEW and never
-auto-accepts. A failing proposal is discarded and the deterministic mapping
-stands, so the tier can only improve on what was there. Offline, nothing
-changes.
-
-**Matcher correctness.** Type compatibility is no longer allowed to carry a
-mapping on its own. Two string columns are type-compatible with every string
-target, so without a floor ~20 candidates tied at exactly 0.4 and the winner was
-decided by column order — which is how `POLNO` came to feed both
-`tax_file_number` and `investor_id` while `NINO` and `CUSTID` were reported as
-"no target attribute". The same principle was already applied to boolean and
-enum targets; plain strings were the gap. Matches that are not lexical at all
-are recovered through authored `aliases` rather than a synonym table buried in
-the matcher.
-
-**Reconciliation is a four-step workflow**, mirroring the mapping workspace's
-propose → review → certify shape, which it previously lacked:
-
-    1. Rule Generation   controls derived from the certified mapping, the target
-                         dictionary and the source insight (api/recon_rules.py)
-    2. Human Review      a reviewer deselects what does not apply and may add the
-                         business's own controls
-    3. Script Generation the standalone script, built from the CERTIFIED set
-    4. Reconciliation    executed against the delivered file, from the same set
-
-Step 1 used to happen silently when the tab rendered, so the workflow appeared
-to begin at review and the derivation was invisible. It is now an explicit
-action. Steps 3 and 4 are gated on certification by DISABLING their actions, not
-by hiding the panels — hiding removed the steps from view entirely and made the
-tool look as though it had none.
-
-Business-authored controls are AGGREGATES — sum / average / min / max / count /
-distinct count of a column, optionally broken down by categorical columns, e.g.
-"total sum assured for each product reconciles". Chosen entirely from the target
-dictionary, so an invalid control cannot be expressed: there is no prose, and
-therefore nothing to translate into SQL. Cross-field conditions are mined from
-the data already, so asking a human to re-key them added nothing.
-
-**Reconciliation workspace.** Three families, and the count matters: a check
-that cannot fail, or that a stronger check already covers, costs the reader
-attention and earns nothing. *Control totals* are the figures a migration
-control sheet carries — rows source vs delivered, columns against the certified
-spec, populated cells out of total, distinct business keys, and the total of
-every numeric column. *Category counts* group record counts by value on both
-sides for every low-cardinality attribute carrying a transform, so "how many in
-force, how many exited, how many per product" falls out of the data rather than
-a configured rule. *Cross-field rules* enforce the conditional-population
-patterns mined from the source.
-
-Three families were removed rather than kept for volume. `value_loss` was an
-aggregate populated-count comparison, strictly subsumed by validation's
-transform check, which re-executes every certified transform value by value and
-names the offending record — weaker and noisier. `aggregate` sums stopped being
-a check for the same reason (if a value moved, the cell-level check caught it)
-and became a reported control total, because a reviewer still expects a money
-column to tie out on the face of the report. `derivation` read a field removed
-when the dictionary was simplified and could never fire. Row count moved into
-control totals: it was the one check name literally duplicated between the two
-workspaces, and a test now asserts the two share none.
-
-Cross-field rules are mined in SOURCE terms (`STATCD in {CL}`) but evaluated
-against delivered data holding the TRANSFORMED value (`CLOSED`). Driver codes
-are therefore translated through the driver's own certified transform before
-comparison — without that, all five rules failed 100% on correct data.
-
-All four workspaces now share the same furniture: an inputs panel naming what
-feeds them (with view links), a two-station agent rail (rule generation →
-execution), a generated script, and results.
-
-**Validation workspace.** Four panels: the inputs it is validating against
-(certified spec, delivered output, target dictionary, source files — mirroring
-the transformation workspace), the generated script, the rules that script
-checks, and the results.
-
-*Rules are described per FAMILY, not per column.* Completeness and domain are
-one rule each applied across N attributes, with the affected attribute list
-carried on the rule so it stays auditable. A rule-per-column preview was 17
-cards on a 23-attribute target and would be 40+ on a realistic one, all saying
-the same thing.
-
-*Results are a table, one row per target attribute*, columns for the check
-families that can apply to an attribute (completeness, domain, key integrity).
-Table-level checks (wellformed, grain) sit above it, since they belong to no
-attribute. Filter by issues / untested, search by name, download as CSV. Every
-declared attribute gets a row even when no test applies to it — that
-no-silent-skips invariant is what lets the table be read as coverage, without
-a self-reported percentage to argue about.
-
-*A failure names the offending records.* Every failing check carries a sample
-of what actually broke, keyed by the mapped business key so a reviewer can find
-the record in the source system — for a transform failure that is
-`policy_reference | expected | delivered`, a genuine row-level diff, not just a
-count. Samples render as a table and download as CSV. Row numbers are file
-positions, not positions within the filtered set (`row_number() OVER ()` applied
-after a `WHERE` numbers the survivors, so the first offender always read "row 1").
-Because rows are aligned by ordinal position, a row-count mismatch suspends the
-transform comparison entirely rather than cascading one extra row into a dozen
-spurious column failures that bury the real defect.
-
-*Every executed check carries the SQL it ran and the population it scanned.*
-A green tick is a claim; a green tick with its SQL and row count is evidence.
-Cells expand on click (lazily — a 50-attribute table would otherwise build 150
-evidence blocks it never shows) to the SQL, the violation and scan counts, and
-sample offending rows. The same SQL appears in the downloadable script, so the
-results and the script are reconcilable.
-
-## What the demo UI exposes vs. what the engine holds
-
-The shipped UI is four tabs — mapping, transformation, validation,
-reconciliation — all driven by `flow_mapping_manual`. The earlier
-source-understanding and knowledge-explorer tabs were retired, and their
-delivery-layer code (15 HTTP endpoints, their SSE generators, the per-agent
-input-label builder, the `which=` mode of `/api/raw`, and the analyst /
-legacy-expert cards in the frontend) has been **deleted** rather than left
-unreachable.
-
-The ENGINE behind those tabs was deliberately kept: `analyst.analyze`,
+The **engine** behind them was deliberately kept: `analyst.analyze`,
 `legacy_expert`, `kgraph`, `kgstore`, `composite` and `relationship` are still
-present, still exercised by the test suite, and still reachable through the CLI
-(`cli/run_flow_a.py`, `cli/run_flow_b.py`, `cli/kg.py`). That is the COBOL
-comprehension and certification story; it is not dead code just because one UI
-stopped calling it.
+present, still exercised by the test suite, and still reachable through the CLI.
+That is the COBOL comprehension and certification story — dataflow slicing,
+88-level condition names, parse-coverage caps that force SME review instead of a
+confident guess — and it is not dead code merely because one UI stopped calling
+it.
 
-Two helpers moved out of modules they didn't belong to, so the live path no
-longer imports the retired one: `_llm_json` (LLM JSON repair + retry) went from
-`agents/legacy_expert.py` to `engine/llmjson.py`, and `file_sha256` from
-`kgstore.py` to `engine/hashing.py`. Both are re-exported from their old homes,
-so existing imports keep working.
+---
 
 ## Quick start
 
@@ -369,23 +265,43 @@ so existing imports keep working.
 python -m venv .venv && . .venv/bin/activate    # Windows: .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 
-# Demo UI (one process: serves the SPA + streams the pipeline)
+# Demo UI — serves the SPA and streams the pipeline
 python -m uvicorn api.server:app --port 8000
 # open http://127.0.0.1:8000
 
-# CLI: full pipeline
-python -m cli.run --source data/EFAS0042.csv --target-dict data/target_dict/<your-file>.json --code data/legacy
+# Tests
+python -m pytest -q
 
 # Render the pipeline graph (Mermaid)
 python -m engine.orchestration.graph
-
-# Tests
-python -m pytest -q
 ```
+
+### Worked example
+
+`data/revised/` holds a matched two-file set. Upload to workspace 1:
+
+| File | Bucket |
+|---|---|
+| `EFAS0042.csv`, `ESCH0009.csv` | **C** · Source data |
+| `dict_EFAS0042.json`, `dict_ESCH0009.json` | **A** · Source dictionaries |
+| `../target_dict/*.json` | **B** · Target dictionary |
+
+The join is discovered from the **data**, not from names: `SCHNO` and `SCHREF`
+share no name, but every `SCHNO` value is contained in `SCHREF` and `SCHREF` is
+unique — so an N:1 edge is inferred, the policy file becomes the primary, and
+`employer_name` maps from the second file.
+
+`tests/fixtures/` holds a deliberately hostile second domain — a claims extract
+with a space in a column name, a unicode column, and an apostrophe inside a
+target enum value — used to prove the generators survive content they have never
+seen.
 
 ## LLM mode (optional)
 
-The pipeline runs deterministically offline by default. To enable live LLM
-reasoning (PII analysis, narration), copy `.env.example` to `.env` and set either
-a standard OpenAI key (`OPENAI_API_KEY`) or the Azure OpenAI variables. The UI
-pill shows which provider is active.
+Deterministic and offline by default. To enable the escalation tiers, copy
+`.env.example` to `.env`, set either `OPENAI_API_KEY` or the Azure OpenAI
+variables, and install the optional `openai` package. Readiness requires
+**both**: credentials without the SDK used to report ready and then raise
+`ModuleNotFoundError` mid-run, taking the whole mapping down. The UI pill shows
+which provider is active, and distinguishes "no credentials" from "credentials
+set, but the `openai` package is not installed".
