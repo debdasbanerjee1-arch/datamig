@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agentic Mapping and Transformation</title>
+<link rel="stylesheet" href="/static/styles.css?v=43">
+</head>
+<body>
+<div class="aurora" aria-hidden="true"></div>
+
+<header class="topbar">
+  <!-- Brand section updated with container alignment for the corporate image -->
+  <div class="brand" style="display: flex; align-items: center; gap: 18px;">
+    <img src="/static/logo.png" alt="Royal London Logo" style="height: 44px; width: auto; object-fit: contain; display: block;" onerror="this.style.display='none';">
+    <div style="border-left: 1px solid var(--line2); height: 32px; margin-left: 4px; padding-left: 18px; display: flex; align-items: center;">
+      <h1 style="margin: 0; line-height: 1.2;">Agentic Mapping and Transformation</h1>
+    </div>
+  </div>
+  <div class="controls">
+    <span id="mode" class="pill">rule-based</span>
+    <div class="seg" id="seg">
+      <button class="seg-btn active" data-mode="auto">Auto</button>
+      <button class="seg-btn" data-mode="step">Step</button>
+    </div>
+    <button id="run" class="btn btn-primary">Run mapping</button>
+    <button id="next" class="btn btn-ghost" hidden>Next agent &rarr;</button>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab-btn active" data-tab="b">1 · Mapping workspace</button>
+  <button class="tab-btn" data-tab="t">2 · Transformation workspace</button>
+  <button class="tab-btn" data-tab="val">3 · Validation workspace</button>
+  <button class="tab-btn" data-tab="rec">4 · Reconciliation workspace</button>
+</nav>
+
+<!-- Mapping workspace inputs: every artefact the mapping agent (and the
+     validation it triggers) consumes, uploaded manually here instead of
+     being computed by an upstream flow — enriched, target_dict, warehouse
+     and the warehouse source data. The source insight validation needs for its
+     key-integrity / crossfield checks is NOT an input: it is derived from the
+     source data by the lightweight analyst
+     (engine/agents/analyst.py:analyze_light) and cached server-side, so there
+     is nothing for the user to supply or keep in sync. Nothing the pipeline
+     reads is left implicit. -->
+<section class="inputs-panel tabsec tab-b" id="target-panel">
+  <div class="ip-head">
+    <span class="eyebrow">Mapping inputs · what feeds the Mapping Agent</span>
+    <span style="margin-left:auto;display:flex;gap:8px;align-items:center">
+      <button id="ip-reset" class="btn-sm" title="delete all uploaded artefacts">Reset workspace…</button>
+    </span>
+  </div>
+  <div class="ip-body">
+    <div class="ip-buckets">
+      <div class="ip-bucket">
+        <div class="ip-blabel">A &middot; Source dictionaries <span class="muted">&middot; JSON &middot; one per source file</span></div>
+        <div class="ip-files" id="ip-enriched"></div>
+        <label class="btn-sm upload-btn">＋ Add enriched dictionary<input type="file" class="ip-add" data-role="enriched" accept=".json" multiple hidden></label>
+        <div id="map-enriched-preview" class="map-preview"></div>
+      </div>
+      <div class="ip-bucket">
+        <div class="ip-blabel">B &middot; Target dictionary</div>
+        <div class="ip-files" id="ip-target"></div>
+        <label class="btn-sm upload-btn">＋ Add target<input type="file" class="ip-add" data-role="target" accept=".json" multiple hidden></label>
+        <div id="map-target-preview" class="map-preview"></div>
+      </div>
+      <div class="ip-bucket">
+        <div class="ip-blabel">C &middot; Source data</div>
+        <div class="ip-files" id="ip-source"></div>
+        <label class="btn-sm upload-btn">＋ Add source<input type="file" class="ip-add" data-role="source" accept=".csv,.tsv" multiple hidden></label>
+      </div>
+    </div>
+
+    <div class="map-preflight" id="map-preflight"></div>
+  </div>
+</section>
+
+<section class="rail-wrap tabsec tab-b tab-t tab-val tab-rec" aria-label="Pipeline">
+  <div id="rail" class="rail"></div>
+</section>
+
+<main class="stage tabsec tab-b">
+  <section class="panel inspector" id="inspector" aria-label="Stage detail">
+    <div class="panel-head">
+      <span class="eyebrow" id="insp-step">Stage</span>
+      <h2 id="insp-title">Press Run to begin</h2>
+      <p class="muted" id="insp-sub">Mapping, validation and review — turning your uploaded artefacts into a validated target mapping.</p>
+    </div>
+    <div class="io">
+      <div class="io-col">
+        <div class="io-label">Input</div>
+        <div id="insp-input" class="io-body"></div>
+      </div>
+      <div class="io-arrow">&rarr;</div>
+      <div class="io-col">
+        <div class="io-label">Output</div>
+        <div id="insp-output" class="io-body io-output"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<section class="review-wrap tabsec tab-b" id="review-section" hidden>
+  <div class="outcome" id="verdict-card" data-verdict="">
+    <div class="outcome-verdict">
+      <span class="io-label">Verdict</span>
+      <span class="verdict-value" id="verdict-value">&mdash;</span>
+      <span class="muted" id="verdict-sub"></span>
+    </div>
+    <div class="outcome-tiles">
+      <div class="tile"><span id="t-mapped" class="tile-num">&mdash;</span><span class="tile-lab">mapped</span></div>
+      <div class="tile ok"><span id="t-auto" class="tile-num">&mdash;</span><span class="tile-lab">auto-accept</span></div>
+      <div class="tile warn"><span id="t-review" class="tile-num">&mdash;</span><span class="tile-lab">to review</span></div>
+      <div class="tile bad"><span id="t-reject" class="tile-num">&mdash;</span><span class="tile-lab">rejected</span></div>
+    </div>
+  </div>
+  <div class="panel review">
+    <div class="panel-head row">
+      <div>
+        <span class="eyebrow">Human in the loop</span>
+        <h2 id="review-title">Review queue</h2>
+        <p class="muted" id="review-sub"></p>
+      </div>
+      <div class="review-actions">
+        <span class="muted" id="review-progress"></span>
+        <button id="amend" class="btn-sm" hidden title="reopen the certified mapping to change a decision">Amend decisions</button>
+        <button id="accept-suggested" class="btn-sm">Accept all suggested</button>
+        <button id="certify" class="btn btn-primary" disabled>Certify mapping &rarr;</button>
+      </div>
+    </div>
+    <div id="certify-overlay" class="certify-overlay" hidden>
+      <div class="spinner"></div>
+      <div class="certify-overlay-text">
+        <b id="certify-status">Applying your decisions…</b>
+        <span class="muted" id="certify-substatus">This re-runs validation and review with your choices applied — the mapping isn't recomputed.</span>
+      </div>
+    </div>
+    <div id="review-list" class="cards"></div>
+  </div>
+
+  <div class="panel final" id="final-section" hidden>
+    <div class="panel-head row">
+      <div>
+        <span class="eyebrow">Certified</span>
+        <h2>Final mapping &mdash; ready to load</h2>
+        <p class="muted" id="final-sub"></p>
+      </div>
+      <div class="review-actions">
+        <button class="btn-sm dl" data-fmt="json">&#10515; JSON</button>
+        <button class="btn-sm dl" data-fmt="sql">&#10515; SQL</button>
+        <button class="btn-sm dl" data-fmt="md">&#10515; Markdown</button>
+      </div>
+    </div>
+    <div id="final-table"></div>
+  </div>
+</section>
+
+<!-- ============ 2 · TRANSFORMATION WORKSPACE ============
+     Consumes the mapping certified on 1 · Mapping workspace (state.finalSpec)
+     and generates + runs an executable ETL against the loaded source file(s). ============ -->
+<section class="inputs-panel tabsec tab-t" id="tf-inputs-panel" hidden>
+  <div class="ip-head">
+    <span class="eyebrow">Transformation inputs</span>
+    <div class="review-actions" style="margin-left:auto">
+      <button class="btn-sm" id="tf-import" title="run a mapping specification certified earlier">Import mapping spec…</button>
+      <button class="btn-sm" id="tf-import-clear" hidden title="go back to the mapping certified on tab 1">Use certified spec</button>
+      <input type="file" id="tf-import-file" accept=".json,application/json" hidden>
+      <input type="file" id="tf-add-source" accept=".csv,.tsv" multiple hidden>
+    </div>
+  </div>
+  <div class="ip-body">
+    <div class="tf-feeds" id="tf-feeds"></div>
+  </div>
+</section>
+
+<section class="tabsec tab-t" id="tf-section" hidden>
+  <div class="tf-gate" id="tf-gate" hidden>
+    <div class="panel">
+      <div class="panel-head">
+        <span class="eyebrow">Nothing to transform yet</span>
+        <h2>Certify a mapping first</h2>
+        <p class="muted">The transformation workspace runs the mapping certified on
+          <b>1 · Mapping workspace</b>. Run the mapping and certify a spec, then return here to
+          generate and execute the ETL.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="tf-grid" id="tf-grid" hidden>
+    <!-- LEFT: generated code -->
+    <section class="panel tf-code-panel" aria-label="Generated ETL">
+      <div class="panel-head row">
+        <div>
+          <span class="eyebrow">Stage 6 · Code generation</span>
+          <h2>Generated ETL script</h2>
+          <p class="muted" id="tf-code-sub">Compiles the certified mapping into a runnable script.</p>
+        </div>
+        <div class="review-actions">
+          <span class="chip mono" id="tf-code-lang">python</span>
+          <button class="btn btn-primary" id="tf-generate">Generate ETL</button>
+          <button class="btn-sm" id="tf-copy" disabled>Copy</button>
+          <button class="btn-sm" id="tf-dl-code" disabled>Download .py</button>
+        </div>
+      </div>
+      <div class="tf-editor" id="tf-editor">
+        <div class="tf-gutter" id="tf-gutter"></div>
+        <pre class="tf-pre"><code id="tf-code" class="mono"></code></pre>
+      </div>
+    </section>
+
+    <!-- RIGHT: execution + output -->
+    <section class="panel tf-run-panel" aria-label="Execution runtime">
+      <div class="panel-head row">
+        <div>
+          <span class="eyebrow">Stage 7 · Execution runtime</span>
+          <h2>Run &amp; materialise target</h2>
+          <p class="muted" id="tf-run-sub">Runs the generated script against the loaded source file(s).</p>
+        </div>
+        <div class="review-actions">
+          <button id="tf-run" class="btn btn-primary" disabled>&#9654;&nbsp; Run transformation</button>
+        </div>
+      </div>
+
+      <div class="tf-runstate" id="tf-runstate">
+        <div class="tf-stat"><span class="tf-stat-num" id="tf-stat-rows">&mdash;</span><span class="tf-stat-lab">target rows</span></div>
+        <div class="tf-stat"><span class="tf-stat-num" id="tf-stat-cols">&mdash;</span><span class="tf-stat-lab">columns</span></div>
+        <div class="tf-stat"><span class="tf-stat-num" id="tf-stat-src">&mdash;</span><span class="tf-stat-lab">source files</span></div>
+        <div class="tf-stat"><span class="tf-stat-num" id="tf-stat-time">&mdash;</span><span class="tf-stat-lab">run time</span></div>
+      </div>
+
+      <div class="tf-console" id="tf-console">
+        <span class="tf-prompt">$</span> <span id="tf-console-line" class="muted">Generate the ETL first, then run it.</span>
+      </div>
+    </section>
+  </div>
+
+  <!-- OUTPUT: full-width data grid -->
+  <section class="panel tf-out-panel tabsec tab-t" id="tf-out-panel" hidden aria-label="Transformed output">
+    <div class="panel-head row">
+      <div>
+        <span class="eyebrow">Output</span>
+        <h2 id="tf-out-title">Transformed target dataset</h2>
+        <p class="muted" id="tf-out-sub"></p>
+      </div>
+      <div class="review-actions">
+        <input id="tf-filter" class="tf-filter" placeholder="Filter rows…" hidden>
+        <button class="btn btn-primary" id="tf-dl-csv" disabled>&#10515;&nbsp; Download CSV</button>
+      </div>
+    </div>
+    <div id="tf-grid-wrap" class="tf-grid-wrap"></div>
+  </section>
+</section>
+
+<!-- ============ 3 · VALIDATION WORKSPACE ============
+     Checks the DELIVERED transformed output (tab 2's CSV) against the
+     certified mapping spec + target dictionary — generate a script, review
+     it, run it on demand, see the results. Independent of tab 2's own
+     codegen/run (which only produces the ETL). -->
+<!-- Validation inputs — mirrors the transformation workspace. Tab 3 previously
+     showed no indication of WHAT it was validating against; a reader could not
+     tell which spec, which delivered file or which target dictionary was in
+     play. -->
+<section class="inputs-panel tabsec tab-val" id="val-inputs-panel" hidden>
+  <div class="ip-head"><span class="eyebrow">Validation inputs</span></div>
+  <div class="ip-body">
+    <div class="tf-feeds" id="val-feeds"></div>
+  </div>
+</section>
+
+<section class="tabsec tab-val" id="val-section" hidden>
+  <div class="tf-gate" id="val-gate" hidden>
+    <div class="panel">
+      <div class="panel-head">
+        <span class="eyebrow">Nothing to validate yet</span>
+        <h2>Run the transformation first</h2>
+        <p class="muted">The validation workspace checks the output <b>2 · Transformation workspace</b>
+          produced. Certify a mapping, run the transformation, then return here to generate
+          and run the validation script.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="tf-grid" id="val-grid" hidden>
+    <section class="panel tf-code-panel" aria-label="Generated validation script">
+      <div class="panel-head row">
+        <div>
+          <span class="eyebrow">Script generation</span>
+          <h2>Generated validation script</h2>
+          <p class="muted" id="val-code-sub">Checks the delivered output against the certified mapping + target dictionary.</p>
+        </div>
+        <div class="review-actions">
+          <span class="chip mono">python</span>
+          <button class="btn btn-primary" id="val-generate">Generate script</button>
+          <button class="btn-sm" id="val-copy" disabled>Copy</button>
+          <button class="btn-sm" id="val-dl-code" disabled>Download .py</button>
+        </div>
+      </div>
+      <div class="tf-editor" id="val-editor">
+        <div class="tf-gutter" id="val-gutter"></div>
+        <pre class="tf-pre"><code id="val-code" class="mono"></code></pre>
+      </div>
+    </section>
+
+    <section class="panel tf-run-panel" aria-label="Run validation">
+      <div class="panel-head row">
+        <div>
+          <span class="eyebrow">Execution</span>
+          <h2>Run &amp; verify</h2>
+          <p class="muted">Runs the check families against the delivered output.</p>
+        </div>
+        <div class="review-actions">
+          <button id="val-run" class="btn btn-primary" disabled>&#9654;&nbsp; Run validation</button>
+        </div>
+      </div>
+      <div class="tf-runstate">
+        <div class="tf-stat"><span class="tf-stat-num" id="val-stat-checks">&mdash;</span><span class="tf-stat-lab">checks</span></div>
+        <div class="tf-stat"><span class="tf-stat-num" id="val-stat-pass">&mdash;</span><span class="tf-stat-lab">passed</span></div>
+        <div class="tf-stat"><span class="tf-stat-num" id="val-stat-fail">&mdash;</span><span class="tf-stat-lab">failed</span></div>
+        <div class="tf-stat"><span class="tf-stat-num" id="val-stat-time">&mdash;</span><span class="tf-stat-lab">run time</span></div>
+      </div>
+      <div class="tf-console" id="val-console">
+        <span class="tf-prompt">$</span> <span id="val-console-line" class="muted">Generate the script first, then run it.</span>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel" id="val-rules-panel" hidden aria-label="Rules the script checks">
+    <div class="panel-head row">
+      <div>
+        <span class="eyebrow">Script generation</span>
+        <h2>Rules this script checks</h2>
+        <p class="muted" id="val-rules-sub"></p>
+      </div>
+    </div>
+    <div id="val-rules"></div>
+  </section>
+
+  <section class="panel" id="val-out-panel" hidden aria-label="Validation results">
+    <div class="panel-head row">
+      <div>
+        <span class="eyebrow">Results</span>
+        <h2>Validation results</h2>
+        <p class="muted" id="val-out-sub"></p>
+      </div>
+      <div class="review-actions">
+        <input id="val-filter" class="val-search" type="search" placeholder="Filter attribute…" />
+        <button class="btn-sm vf on" data-vf="all">All</button>
+        <button class="btn-sm vf" data-vf="issues">Issues</button>
+        <button class="btn-sm vf" data-vf="untested">Untested</button>
+        <button class="btn-sm" id="val-dl-results">Download results .csv</button>
+      </div>
+    </div>
+    <!-- (3)+(5) summary. The headline is the CELL count — every value of every
+         column that received per-value examination — because that is what the
+         confidence rests on, and unlike a percentage a reader can verify it by
+         multiplication. -->
+    <div id="val-summary" class="val-summary"></div>
+    <!-- table-level checks (wellformed, grain, duplicates) belong to no attribute -->
+    <div id="val-table-checks" class="val-tablechecks"></div>
+    <div id="val-matrix"></div>
+  </section>
+
+</section>
+
+<!-- ============ 4 · RECONCILIATION WORKSPACE ============
+     Technical (row counts, per-field value loss, numeric aggregate diffs)
+     + business-rule (cross-field dependencies, calculated-field derivations)
+     reconciliation against the DELIVERED transformed output. Same
+     generate / display / run-on-instruction pattern as tab 3. -->
+<!-- Reconciliation inputs — same shape as the transformation and validation
+     workspaces, so all three read identically. -->
+<section class="inputs-panel tabsec tab-rec" id="rec-inputs-panel" hidden>
+  <div class="ip-head"><span class="eyebrow">Reconciliation inputs</span></div>
+  <div class="ip-body">
+    <div class="tf-feeds" id="rec-feeds"></div>
+  </div>
+</section>
+
+<section class="tabsec tab-rec" id="rec-section" hidden>
+  <div class="tf-gate" id="rec-gate" hidden>
+    <div class="panel">
+      <div class="panel-head">
+        <span class="eyebrow">Nothing to reconcile yet</span>
+        <h2>Run the transformation first</h2>
+        <p class="muted">The reconciliation workspace checks the output <b>2 · Transformation workspace</b>
+          produced. Certify a mapping, run the transformation, then return here to generate
+          and run the reconciliation script.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rule review. Reconciliation was the one workspace with no certification
+       gate: rules were derived, run and discarded, leaving no record of which
+       controls were signed off or by whom. The reviewer now decides which apply
+       and may add the business's own — structured, never free text, so there is
+       nothing to translate into SQL. -->
+  <section class="panel" id="rec-rules-review" hidden aria-label="Reconciliation controls">
+    <div class="panel-head row">
+      <div>
+        <span class="eyebrow">Controls</span>
+        <h2>Reconciliation controls</h2>
+        <p class="muted" id="rec-rules-sub"></p>
+      </div>
+      <div class="review-actions">
+        <button class="btn btn-primary" id="rec-propose">Propose controls</button>
+        <button class="btn-sm" id="rec-add-toggle" disabled>＋ Add a control</button>
+        <button class="btn btn-primary" id="rec-certify" disabled>Certify controls →</button>
+      </div>
+    </div>
+    <div id="rec-add-form" hidden></div>
+    <div id="rec-rules-rejected"></div>
+    <div id="rec-rules-list"></div>
+  </section>
+
+  <div class="tf-grid" id="rec-grid" hidden>
+    <section class="panel tf-code-panel" aria-label="Generated reconciliation script">
+      <div class="panel-head row">
+        <div>
+          <span class="eyebrow">Script generation</span>
+          <h2>Generated reconciliation script</h2>
+          <p class="muted" id="rec-code-sub">Generated from the certified controls above — the same rules the report executes.</p>
+        </div>
+        <div class="review-actions">
+          <span class="chip mono">python</span>
+          <button class="btn btn-primary" id="rec-generate">Generate script</button>
+          <button class="btn-sm" id="rec-copy" disabled>Copy</button>
+          <button class="btn-sm" id="rec-dl-code" disabled>Download .py</button>
+        </div>
+      </div>
+      <div class="tf-editor" id="rec-editor">
+        <div class="tf-gutter" id="rec-gutter"></div>
+        <pre class="tf-pre"><code id="rec-code" class="mono"></code></pre>
+      </div>
+    </section>
+
+    <section class="panel tf-run-panel" aria-label="Run reconciliation">
+      <div class="panel-head row">
+        <div>
+          <span class="eyebrow">Execution</span>
+          <h2>Run &amp; reconcile</h2>
+          <p class="muted">Runs the technical + business-rule checks against the delivered output.</p>
+        </div>
+        <div class="review-actions">
+          <button id="rec-run" class="btn btn-primary" disabled>&#9654;&nbsp; Run reconciliation</button>
+        </div>
+      </div>
+      <div class="tf-runstate">
+        <div class="tf-stat"><span class="tf-stat-num" id="rec-stat-tech">&mdash;</span><span class="tf-stat-lab">technical</span></div>
+        <div class="tf-stat"><span class="tf-stat-num" id="rec-stat-biz">&mdash;</span><span class="tf-stat-lab">business rule</span></div>
+        <div class="tf-stat"><span class="tf-stat-num" id="rec-stat-fail">&mdash;</span><span class="tf-stat-lab">failed</span></div>
+        <div class="tf-stat"><span class="tf-stat-num" id="rec-stat-time">&mdash;</span><span class="tf-stat-lab">run time</span></div>
+      </div>
+      <div class="tf-console" id="rec-console">
+        <span class="tf-prompt">$</span> <span id="rec-console-line" class="muted">Generate the script first, then run it.</span>
+      </div>
+    </section>
+  </div>
+
+  
+
+  <section class="panel" id="rec-dash-panel" hidden aria-label="Reconciliation summary">
+    <div class="panel-head">
+      <span class="eyebrow">Summary</span>
+      <h2>Reconciliation summary</h2>
+      <p class="muted">Does the delivered data reconcile with the source? The figures
+        behind each control are in the sections below.</p>
+    </div>
+    <div id="rec-dash"></div>
+  </section>
+
+  <section class="panel" id="rec-out-panel" hidden aria-label="Reconciliation results">
+    <div class="panel-head row">
+      <div>
+        <span class="eyebrow">Results &middot; technical</span>
+        <h2>Technical reconciliation</h2>
+      </div>
+    </div>
+    <div id="rec-tech-checks" class="check-groups"></div>
+  </section>
+
+  <section class="panel" id="rec-biz-panel" hidden aria-label="Business rule results">
+    <div class="panel-head row">
+      <div>
+        <span class="eyebrow">Results &middot; business rule</span>
+        <h2>Business-rule reconciliation</h2>
+      </div>
+    </div>
+    <div id="rec-biz-checks" class="check-groups"></div>
+  </section>
+</section>
+
+<footer class="foot"><span id="foot-roi" class="muted"></span></footer>
+
+<div id="modal" class="modal" hidden>
+  <div class="modal-card">
+    <div class="modal-head">
+      <span id="modal-title" class="mono"></span>
+      <button id="modal-close" class="btn-sm">&times; Close</button>
+    </div>
+    <pre id="modal-body" class="mono"></pre>
+  </div>
+</div>
+
+<script src="/static/app.js?v=53"></script>
+</body>
+</html>

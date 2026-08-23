@@ -1,0 +1,20 @@
+# ===== datamap — agentic source-to-target mapping =====
+# Install:  pip install -r requirements.txt
+
+# --- core: pipeline + LangGraph orchestration (always needed) ---
+langgraph>=0.2.0
+duckdb>=1.0.0
+pydantic>=2.6
+python-dotenv>=1.0        # loads .env; optional (agents run fine without it)
+
+# --- UI demo server (NEW — added for the dashboard) ---
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9   # FastAPI multipart uploads (input loader)
+
+# --- LLM: only needed when running against Azure OpenAI ---
+# the offline-stub demo needs none of this; install for live LLM narration
+openai>=1.40
+
+# --- dev / tests (optional) ---
+# pytest>=8.0

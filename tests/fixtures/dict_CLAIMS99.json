@@ -1,0 +1,59 @@
+{
+ "table": "CLAIMS99",
+ "columns": [
+  {
+   "name": "CLM REF",
+   "business_name": "Claim Reference",
+   "description": "Unique claim id.",
+   "inferred_type": "IDENTIFIER"
+  },
+  {
+   "name": "CLAIM TYPE",
+   "business_name": "Claim Type",
+   "description": "Kind of claim.",
+   "inferred_type": "CODE",
+   "value_decode": {
+    "DTH": "Death",
+    "CRT": "Critical Illness",
+    "INC": "Income Protection",
+    "TPD": "O'Brien Scheme TPD"
+   }
+  },
+  {
+   "name": "AMT PAID",
+   "business_name": "Amount Paid",
+   "description": "Settled amount.",
+   "inferred_type": "AMOUNT"
+  },
+  {
+   "name": "SETTLE DT",
+   "business_name": "Settlement Date",
+   "description": "Date settled.",
+   "inferred_type": "DATE"
+  },
+  {
+   "name": "ASSESSOR",
+   "business_name": "Assessor Name",
+   "description": "Who assessed it.",
+   "inferred_type": "FREE_TEXT"
+  },
+  {
+   "name": "Ünïcode Col",
+   "business_name": "Greek Marker",
+   "description": "Unicode category.",
+   "inferred_type": "CODE",
+   "value_decode": {
+    "α": "Alpha",
+    "β": "Beta",
+    "γ": "Gamma"
+   }
+  },
+  {
+   "name": "NOTES",
+   "business_name": "Notes",
+   "description": "Free text notes.",
+   "inferred_type": "FREE_TEXT"
+  }
+ ],
+ "rules": []
+}

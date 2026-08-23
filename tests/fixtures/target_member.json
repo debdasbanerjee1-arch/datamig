@@ -1,0 +1,35 @@
+{
+ "table": "member",
+ "attributes": [
+  {
+   "name": "policy_reference",
+   "type": "string",
+   "nullable": false,
+   "description": "Policy identifier."
+  },
+  {
+   "name": "full_name",
+   "type": "string",
+   "nullable": false,
+   "description": "Full name as 'Forename Surname'."
+  },
+  {
+   "name": "annual_premium_gbp",
+   "type": "decimal",
+   "nullable": false,
+   "description": "Annualised premium in POUNDS."
+  },
+  {
+   "name": "age_at_commencement",
+   "type": "integer",
+   "nullable": false,
+   "description": "Whole years between date of birth and commencement."
+  },
+  {
+   "name": "postcode_normalised",
+   "type": "string",
+   "nullable": true,
+   "description": "Uppercase postcode, single space before the final three characters."
+  }
+ ]
+}

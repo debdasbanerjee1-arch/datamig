@@ -1,0 +1,157 @@
+{
+  "table": "policy",
+  "description": "Canonical policy master for the target platform. Fully documented; every attribute has a stable business name, type, and description.",
+  "attributes": [
+    {
+      "name": "policy_reference",
+      "type": "string",
+      "description": "Unique policy identifier / reference number."
+    },
+    {
+      "name": "tax_file_number",
+      "type": "string",
+      "nullable": true,
+      "description": "National taxpayer identification number for the policyholder."
+    },
+    {
+      "name": "investor_id",
+      "type": "string",
+      "description": "Unique identifier of the investor / contract holder.",
+      "nullable": true
+    },
+    {
+      "name": "life_assured_full_name",
+      "type": "string",
+      "description": "Full name of the life assured (the insured individual).",
+      "nullable": true
+    },
+    {
+      "name": "inception_date",
+      "type": "date",
+      "description": "Policy inception date \u2014 when cover incepted.",
+      "nullable": true
+    },
+    {
+      "name": "product_category",
+      "type": "enum",
+      "allowed_values": [
+        "Group Pension",
+        "Individual Pension",
+        "With-Profits Endowment",
+        "Term Assurance"
+      ],
+      "description": "The type of pension or insurance product the policy represents."
+    },
+    {
+      "name": "commencement_date",
+      "type": "date",
+      "description": "Date the policy started \u2014 entry into force, or cover start."
+    },
+    {
+      "name": "policy_status",
+      "type": "enum",
+      "allowed_values": [
+        "IN_FORCE",
+        "PAID_UP",
+        "LAPSED",
+        "CLOSED"
+      ],
+      "description": "Current lifecycle status of the policy."
+    },
+    {
+      "name": "exit_date",
+      "type": "date",
+      "nullable": true,
+      "description": "Date the policy terminated or exited; null while the policy is active."
+    },
+    {
+      "name": "exit_reason",
+      "type": "enum",
+      "allowed_values": [
+        "MATURITY",
+        "SURRENDER",
+        "DEATH",
+        "TRANSFER_OUT",
+        "LAPSE"
+      ],
+      "nullable": true,
+      "description": "Reason the policy exited; null while the policy is active."
+    },
+    {
+      "name": "premium_unpaid_since",
+      "type": "date",
+      "nullable": true,
+      "description": "Date premiums first fell unpaid, for lapsed policies; otherwise null."
+    },
+    {
+      "name": "scheme_reference",
+      "type": "string",
+      "nullable": true,
+      "description": "Group scheme identifier; null for individual policies."
+    },
+    {
+      "name": "scheme_name",
+      "type": "string",
+      "nullable": true,
+      "description": "Name of the group scheme; null for individual policies."
+    },
+    {
+      "name": "employer_name",
+      "type": "string",
+      "nullable": true,
+      "description": "Legal name of the sponsoring employer for a group scheme."
+    },
+    {
+      "name": "annual_premium",
+      "type": "decimal",
+      "description": "Premium annualised to a single yearly amount."
+    },
+    {
+      "name": "sum_assured",
+      "type": "decimal",
+      "description": "Sum assured or benefit amount for the policy."
+    },
+    {
+      "name": "is_group_policy",
+      "type": "boolean",
+      "description": "True when the policy belongs to a group scheme, false otherwise."
+    },
+    {
+      "name": "gone_away",
+      "type": "enum",
+      "allowed_values": [
+        "U",
+        "C"
+      ],
+      "nullable": true,
+      "description": "Policyholder gone-away: correspondence returned, no current contact, latest trace failed."
+    },
+    {
+      "name": "vulnerable_customer_flag",
+      "type": "boolean",
+      "description": "True when the policyholder is recorded as a vulnerable customer requiring additional care."
+    },
+    {
+      "name": "loyalty_bonus_amount",
+      "type": "decimal",
+      "nullable": true,
+      "description": "Accrued loyalty bonus payable to long-standing policyholders, derived in the source system from policy tenure, product type, sum assured and status."
+    },
+    {
+      "name": "early_exit_penalty_percent",
+      "type": "decimal",
+      "nullable": true,
+      "description": "Percentage penalty applied on voluntary early exit (surrender or transfer) before the penalty-free point, including any market value adjustment."
+    },
+    {
+      "name": "source_system",
+      "type": "string",
+      "description": "Code identifying the originating source system."
+    },
+    {
+      "name": "migrated_at",
+      "type": "timestamp",
+      "description": "Timestamp at which the record was migrated into the target platform."
+    }
+  ]
+}

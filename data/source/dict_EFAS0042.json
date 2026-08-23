@@ -1,0 +1,227 @@
+{
+  "table": "EFAS0042",
+  "columns": [
+    {
+      "name": "RECTYPE",
+      "business_name": "Record Type",
+      "description": "control field with a constant value.",
+      "inferred_type": "CATEGORICAL_CODE"
+    },
+    {
+      "name": "POLNO",
+      "business_name": "Policy Number",
+      "description": "unique identifier for the policy.",
+      "inferred_type": "IDENTIFIER",
+      "aliases": [
+        "Policy Reference"
+      ],
+      "join_key": true
+    },
+    {
+      "name": "PRODCD",
+      "business_name": "Plan Type",
+      "description": "categorical code representing the type of plan.",
+      "inferred_type": "CATEGORICAL_CODE",
+      "value_decode": {
+        "GPEN": "Group Pension",
+        "IPEN": "Individual Pension",
+        "WPEN": "With-Profits Endowment",
+        "TERM": "Term Assurance"
+      }
+    },
+    {
+      "name": "COMMDT",
+      "business_name": "Policy Entry Date",
+      "description": "the date the policy commenced, in YYYYMMDD format.",
+      "inferred_type": "DATE_YYYYMMDD",
+      "aliases": [
+        "Commencement Date"
+      ]
+    },
+    {
+      "name": "STATCD",
+      "business_name": "Policy Status",
+      "description": "categorical code indicating the current status of the policy.",
+      "inferred_type": "CATEGORICAL_CODE",
+      "value_decode": {
+        "IF": "In Force",
+        "PU": "Paid Up",
+        "LA": "Lapsed",
+        "CL": "Closed"
+      }
+    },
+    {
+      "name": "EXITDT",
+      "business_name": "Exit Date",
+      "description": "the date the policy exited, in YYYYMMDD format. Conditionally populated.",
+      "inferred_type": "DATE_YYYYMMDD"
+    },
+    {
+      "name": "EXITRSN",
+      "business_name": "Exit Reason",
+      "description": "categorical code indicating the reason for policy exit. Conditionally populated.",
+      "inferred_type": "CATEGORICAL_CODE",
+      "value_decode": {
+        "MAT": "Maturity",
+        "SUR": "Surrender",
+        "DTH": "Death Claim",
+        "TRF": "Transfer Out",
+        "LAP": "Lapse"
+      }
+    },
+    {
+      "name": "XA08",
+      "business_name": "Filler 1",
+      "description": "structural filler, no business meaning.",
+      "inferred_type": "EMPTY"
+    },
+    {
+      "name": "UNPDDT",
+      "business_name": "Premium Unpaid Since",
+      "description": "the date from which premiums have been unpaid, in YYYYMMDD format. Conditionally populated.",
+      "inferred_type": "DATE_YYYYMMDD"
+    },
+    {
+      "name": "SCHNO",
+      "business_name": "Scheme Number",
+      "description": "unique identifier for the scheme. Conditionally populated.",
+      "inferred_type": "CATEGORICAL_CODE",
+      "aliases": [
+        "Scheme Reference"
+      ],
+      "join_key": true
+    },
+    {
+      "name": "SCHNM",
+      "business_name": "Scheme Name",
+      "description": "the name of the scheme, free text. Conditionally populated.",
+      "inferred_type": "FREE_TEXT"
+    },
+    {
+      "name": "PREMAMT",
+      "business_name": "Premium Amount",
+      "description": "the amount of premium, in decimal format.",
+      "inferred_type": "DECIMAL",
+      "aliases": [
+        "Annual Premium"
+      ]
+    },
+    {
+      "name": "PREMFRQ",
+      "business_name": "Premium Frequency",
+      "description": "categorical code indicating how often premiums are paid.",
+      "inferred_type": "CATEGORICAL_CODE",
+      "value_decode": {
+        "M": "Monthly",
+        "Q": "Quarterly",
+        "H": "Half-Yearly",
+        "A": "Annual",
+        "SP": "Single Premium"
+      }
+    },
+    {
+      "name": "XA14",
+      "business_name": "Filler 2",
+      "description": "structural filler, no business meaning.",
+      "inferred_type": "EMPTY"
+    },
+    {
+      "name": "SUMASSD",
+      "business_name": "Sum Assured",
+      "description": "the total amount assured, in integer format.",
+      "inferred_type": "INTEGER",
+      "aliases": [
+        "Sum Assured"
+      ]
+    },
+    {
+      "name": "REGION",
+      "business_name": "Region",
+      "description": "control field with a constant value.",
+      "inferred_type": "CATEGORICAL_CODE"
+    },
+    {
+      "name": "MBRNAME",
+      "business_name": "Surname, Forename",
+      "description": "the member's name, free text.",
+      "inferred_type": "FREE_TEXT",
+      "aliases": [
+        "Member Name",
+        "life assured",
+        "insured individual",
+        "full name"
+      ]
+    },
+    {
+      "name": "BIRTHDT",
+      "business_name": "Date of Birth",
+      "description": "the member's birth date, in YYYYMMDD format.",
+      "inferred_type": "DATE_YYYYMMDD"
+    },
+    {
+      "name": "NINO",
+      "business_name": "NI Number",
+      "description": "the National Insurance number, free text.",
+      "inferred_type": "FREE_TEXT",
+      "aliases": [
+        "National Insurance number",
+        "national insurance",
+        "tax identifier",
+        "taxpayer identification"
+      ]
+    },
+    {
+      "name": "PCODE",
+      "business_name": "Postcode",
+      "description": "the member's postcode, free text.",
+      "inferred_type": "FREE_TEXT"
+    },
+    {
+      "name": "COVSTDT",
+      "business_name": "Cover Start Date",
+      "description": "the date coverage starts, in YYYYMMDD format.",
+      "inferred_type": "DATE_YYYYMMDD"
+    },
+    {
+      "name": "XA22",
+      "business_name": "Trace / Contact Status",
+      "description": "categorical code indicating the traceability status.",
+      "inferred_type": "CATEGORICAL_CODE",
+      "value_decode": {
+        "C": "On Record",
+        "U": "Untraceable"
+      }
+    },
+    {
+      "name": "LOYBONUS",
+      "business_name": "Loyalty Bonus",
+      "description": "calculated field representing the loyalty bonus, in decimal format.",
+      "inferred_type": "DECIMAL"
+    },
+    {
+      "name": "EXTPNPCT",
+      "business_name": "Exit Penalty Percent",
+      "description": "calculated field representing the exit penalty percentage, in decimal format.",
+      "inferred_type": "DECIMAL"
+    },
+    {
+      "name": "CUSTID",
+      "business_name": "Customer Reference",
+      "description": "a reference identifier for the customer, free text.",
+      "inferred_type": "FREE_TEXT",
+      "aliases": [
+        "Customer Reference",
+        "investor",
+        "contract holder",
+        "party identifier"
+      ]
+    }
+  ],
+  "rules": [
+    "Each policy is uniquely identified by the Policy Number (POLNO).",
+    "Plan Type (PRODCD) and Policy Status (STATCD) are categorical codes with specific decodes.",
+    "Exit Date (EXITDT) and Exit Reason (EXITRSN) are conditionally populated based on policy status.",
+    "Premium Frequency (PREMFRQ) indicates how often premiums are paid.",
+    "Loyalty Bonus (LOYBONUS) and Exit Penalty Percent (EXTPNPCT) are calculated fields."
+  ]
+}

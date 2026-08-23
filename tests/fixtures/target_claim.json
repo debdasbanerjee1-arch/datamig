@@ -1,0 +1,52 @@
+{
+ "table": "claim",
+ "attributes": [
+  {
+   "name": "claim_reference",
+   "type": "string",
+   "nullable": false,
+   "description": "Unique claim identifier."
+  },
+  {
+   "name": "claim_type",
+   "type": "enum",
+   "nullable": false,
+   "allowed_values": [
+    "Death",
+    "Critical Illness",
+    "Income Protection",
+    "O'Brien Scheme TPD"
+   ],
+   "description": "Kind of claim."
+  },
+  {
+   "name": "amount_paid",
+   "type": "decimal",
+   "nullable": false,
+   "description": "Settled amount."
+  },
+  {
+   "name": "settlement_date",
+   "type": "date",
+   "nullable": true,
+   "description": "Date the claim settled."
+  },
+  {
+   "name": "assessor_name",
+   "type": "string",
+   "nullable": true,
+   "description": "Assessor who handled it."
+  },
+  {
+   "name": "greek_marker",
+   "type": "enum",
+   "nullable": true,
+   "allowed_values": [
+    "Alpha",
+    "Beta",
+    "Gamma"
+   ],
+   "description": "Unicode category."
+  }
+ ]
+}

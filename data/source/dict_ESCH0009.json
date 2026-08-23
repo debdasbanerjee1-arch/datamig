@@ -1,0 +1,53 @@
+{
+  "table": "ESCH0009",
+  "columns": [
+    {
+      "name": "SCHREF",
+      "business_name": "Scheme Reference",
+      "description": "Identifier of the group pension scheme.",
+      "inferred_type": "IDENTIFIER",
+      "aliases": [
+        "Scheme Number",
+        "Scheme Identifier"
+      ],
+      "join_key": true
+    },
+    {
+      "name": "SCHNAME",
+      "business_name": "Scheme Name",
+      "description": "Registered name of the group scheme.",
+      "inferred_type": "FREE_TEXT",
+      "aliases": [
+        "Scheme Title"
+      ]
+    },
+    {
+      "name": "EMPNM",
+      "business_name": "Employer Name",
+      "description": "Legal name of the sponsoring employer for the scheme.",
+      "inferred_type": "FREE_TEXT",
+      "aliases": [
+        "Sponsoring Employer",
+        "Participating Employer",
+        "Employer"
+      ]
+    },
+    {
+      "name": "SCHSTAT",
+      "business_name": "Scheme Status",
+      "description": "Whether the scheme is active or closed to new members.",
+      "inferred_type": "CODE",
+      "value_decode": {
+        "A": "Active",
+        "C": "Closed"
+      }
+    },
+    {
+      "name": "ESTBDT",
+      "business_name": "Scheme Established Date",
+      "description": "Date the scheme was established.",
+      "inferred_type": "DATE"
+    }
+  ],
+  "rules": []
+}

@@ -1,0 +1,59 @@
+{
+ "table": "SRC",
+ "columns": [
+  {
+   "name": "POLNO",
+   "business_name": "Policy Number",
+   "description": "Policy id.",
+   "inferred_type": "IDENTIFIER"
+  },
+  {
+   "name": "SURNAME",
+   "business_name": "Surname",
+   "description": "Family name.",
+   "inferred_type": "FREE_TEXT"
+  },
+  {
+   "name": "FORENAME",
+   "business_name": "Forename",
+   "description": "Given name.",
+   "inferred_type": "FREE_TEXT"
+  },
+  {
+   "name": "PREM_PENCE",
+   "business_name": "Premium Amount",
+   "description": "Premium per instalment, in PENCE.",
+   "inferred_type": "AMOUNT"
+  },
+  {
+   "name": "PREM_FREQ",
+   "business_name": "Premium Frequency",
+   "description": "Instalment frequency.",
+   "inferred_type": "CODE",
+   "value_decode": {
+    "M": "Monthly",
+    "Q": "Quarterly",
+    "A": "Annual"
+   }
+  },
+  {
+   "name": "BIRTHDT",
+   "business_name": "Date of Birth",
+   "description": "Member DOB.",
+   "inferred_type": "DATE"
+  },
+  {
+   "name": "COMMDT",
+   "business_name": "Commencement Date",
+   "description": "Policy start.",
+   "inferred_type": "DATE"
+  },
+  {
+   "name": "PCODE",
+   "business_name": "Postcode",
+   "description": "Correspondence postcode, inconsistent casing/spacing.",
+   "inferred_type": "FREE_TEXT"
+  }
+ ],
+ "rules": []
+}

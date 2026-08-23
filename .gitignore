@@ -1,0 +1,29 @@
+# Local credentials and environment overrides
+.env
+.env.*
+!.env.example
+
+# Python virtual environments and caches
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Test, coverage, and tooling output
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Runtime databases and logs
+data/*.duckdb
+data/*.duckdb-*
+*.log
+
+# OS and editor metadata
+.DS_Store
+Thumbs.db
+.vscode/
